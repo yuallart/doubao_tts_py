@@ -32,9 +32,13 @@ MESSAGE_COMPRESSIONS = {
 
 
 class WebSocketTTSClient:
-    def __init__(self, appid="", token="", cluster="volcano_tts",
+    def __init__(self,
+                 appid="",
+                 token="",
+                 cluster="volcano_tts",
                  voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
-                 host="openspeech.bytedance.com"):
+                 host="openspeech.bytedance.com",
+                 body=None):
         self.appid = appid
         self.token = token
         self.cluster = cluster
@@ -74,6 +78,25 @@ class WebSocketTTSClient:
                 "operation": "query"
             }
         }
+        if body is not None:
+            self.deep_update(self.request_json, body)
+
+    def deep_update(self, default, override):
+        """
+        Recursively merge two dictionaries.
+        :param default: 原始默认值
+        :param override: 要覆盖的值
+        :return: merged dictionary
+        """
+        if isinstance(override, dict) and isinstance(default, dict):
+            for key, value in override.items():
+                if key in default:
+                    default.deep_update(default[key], value)
+                else:
+                    default[key] = value
+            return default
+        else:
+            return override
 
     def _generate_params(self, operation="submit", text=""):
         submit_request_json = copy.deepcopy(self.request_json)
@@ -228,6 +251,7 @@ async def main():
     # 永久阻塞
     while True:
         await client.listen()
+
 
 if __name__ == '__main__':
     try:
