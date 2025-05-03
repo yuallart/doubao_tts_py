@@ -177,7 +177,7 @@ class WebSocketTTSClient:
         tmp_file_path = file_path + ".tmp"
         with open(tmp_file_path, "wb") as file_to_save:
             await self.websocket.send(full_client_request)
-            print("send message success!")
+            print("发送消息成功")
             while True:
                 try:
                     res = await asyncio.wait_for(self.websocket.recv(), timeout=10)
