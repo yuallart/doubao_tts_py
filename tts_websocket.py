@@ -174,8 +174,7 @@ class WebSocketTTSClient:
         if not self.websocket:
             await self.connect()
 
-        tmp_file_path = file_path + ".tmp"
-        with open(tmp_file_path, "wb") as file_to_save:
+        with open(file_path, "wb") as file_to_save:
             await self.websocket.send(full_client_request)
             print("发送消息成功")
             while True:
@@ -190,7 +189,7 @@ class WebSocketTTSClient:
                     print(f"连接失败: {e}")
                     break
 
-        shutil.move(tmp_file_path, file_path)
+        shutil.move(file_path, file_path)
         # 编译器并不是实时监控文件目录的，所以并不会在项目列表中实时刷新，请打开文件管理器手动刷新，以判断有没有生成文件
         print("文件已保存至:", file_path)
 
@@ -224,7 +223,7 @@ async def main():
         host="openspeech.bytedance.com"
     )
     await client.connect()
-    await client.query("你好，我是豆包，今天天气不错，微风徐徐，是一个令人高兴的好天气", "test2.mp3")
+    await client.query("你好，我是豆包", "test2.mp3")
 
     # 永久阻塞
     while True:
