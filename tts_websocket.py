@@ -2,6 +2,8 @@ import asyncio
 import copy
 import gzip
 import json
+import os
+import shutil
 import ssl
 import uuid
 from datetime import datetime
@@ -30,13 +32,9 @@ MESSAGE_COMPRESSIONS = {
 
 
 class WebSocketTTSClient:
-    def __init__(
-            self,
-            appid="1371562691",
-            token="wp5PV1P1TlJFDAGRpbTwSw901rp8hbIj",
-            cluster="volcano_tts",
-            voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
-            host="openspeech.bytedance.com"):
+    def __init__(self, appid="", token="", cluster="volcano_tts",
+                 voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
+                 host="openspeech.bytedance.com"):
         self.appid = appid
         self.token = token
         self.cluster = cluster
@@ -71,7 +69,7 @@ class WebSocketTTSClient:
             },
             "request": {
                 "reqid": "uuid",
-                "text": "字节跳动语音合成。",
+                "text": "字节跳动语音合成成功。",
                 "text_type": "plain",
                 "operation": "query"
             }
@@ -112,7 +110,8 @@ class WebSocketTTSClient:
             f" Message type specific flags: {message_type_specific_flags:#x} - {MESSAGE_TYPE_SPECIFIC_FLAGS[message_type_specific_flags]}")
         print(
             f"Message serialization method: {serialization_method:#x} - {MESSAGE_SERIALIZATION_METHODS[serialization_method]}")
-        print(f"         Message compression: {message_compression:#x} - {MESSAGE_COMPRESSIONS[message_compression]}")
+        print(
+            f"         Message compression: {message_compression:#x} - {MESSAGE_COMPRESSIONS[message_compression]}")
         print(f"                    Reserved: {reserved:#04x}")
         if header_size != 1:
             print(f"           Header extensions: {header_extensions}")
@@ -171,18 +170,29 @@ class WebSocketTTSClient:
             await self.handle_reconnect()
 
     async def query(self, text, file_path):
-        full_client_request = self._generate_params(operation="query", text=text)
-        file_to_save = open(file_path, "wb")
-        """发送结构化JSON数据"""
+        full_client_request = self._generate_params(operation="submit", text=text)
         if not self.websocket:
             await self.connect()
-        try:
+
+        tmp_file_path = file_path + ".tmp"
+        with open(tmp_file_path, "wb") as file_to_save:
             await self.websocket.send(full_client_request)
-            res = await self.websocket.recv()
-            self.parse_response(res, file_to_save)
-            print("\nclosing the connection...")
-        except websockets.ConnectionClosed:
-            await self.handle_reconnect()
+            print("send message success!")
+            while True:
+                try:
+                    res = await asyncio.wait_for(self.websocket.recv(), timeout=10)
+                    condition = self.parse_response(res, file_to_save)
+                    if condition:
+                        file_to_save.flush()
+                        os.fsync(file_to_save.fileno())
+                        break
+                except Exception as e:
+                    print(f"连接失败: {e}")
+                    break
+
+        shutil.move(tmp_file_path, file_path)
+        # 编译器并不是实时监控文件目录的，所以并不会在项目列表中实时刷新，请打开文件管理器手动刷新，以判断有没有生成文件
+        print("文件已保存至:", file_path)
 
     async def handle_reconnect(self):
         """指数退避重连机制"""
@@ -191,10 +201,21 @@ class WebSocketTTSClient:
         print(f"{delay}秒后尝试重连...")
         await asyncio.sleep(delay)
         await self.connect()
-        pass
+
+    async def listen(self):
+        """持续监听消息"""
+        while True:
+            try:
+                async for message in self.websocket:
+                    print(f"收到消息: {message}")
+            except websockets.ConnectionClosed:
+                print("连接丢失，启动重连...")
+                await self.handle_reconnect()
+
+    pass
 
 
-if __name__ == '__main__':
+async def main():
     client = WebSocketTTSClient(
         appid="1371562691",
         token="wp5PV1P1TlJFDAGRpbTwSw901rp8hbIj",
@@ -202,4 +223,15 @@ if __name__ == '__main__':
         voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
         host="openspeech.bytedance.com"
     )
-    asyncio.run(client.submit("你好，我是豆包", "test_submit1.mp3"))
+    await client.connect()
+    await client.query("你好，我是豆包，今天天气不错，微风徐徐，是一个令人高兴的好天气", "test2.mp3")
+
+    # 永久阻塞
+    while True:
+        await client.listen()
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("客户端已手动终止")
