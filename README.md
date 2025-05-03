@@ -27,3 +27,7 @@
 
 ### 1. 环境准备
 确保已安装Python 3.7或更高版本，并安装项目依赖：
+
+## 相关
+[字节跳动开放平台](https://open.bytedance.com/)
+[豆包大模型语音生成TTS文档](https://www.volcengine.com/docs/6561/1257584)

@@ -239,8 +239,8 @@ class WebSocketTTSClient:
 
 async def main():
     client = WebSocketTTSClient(
-        appid="1371562691",
-        token="wp5PV1P1TlJFDAGRpbTwSw901rp8hbIj",
+        appid="1371412291",
+        token="wp5PV111TlJGDAGRDbTSSw931fp89bIj",
         cluster="volcano_tts",
         voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
         host="openspeech.bytedance.com"
