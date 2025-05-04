@@ -9,7 +9,6 @@ dist.war
 *-dist.war
 *.local
 .temp
-*.mp3
 
 # local env files
 .env.local
@@ -25,3 +24,4 @@ dist.war
 *.sw?
 
 .history
+.venv
