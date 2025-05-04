@@ -1,38 +1,12 @@
 import asyncio
-import copy
 import gzip
 import json
 import os
-import shutil
 import ssl
-import uuid
-from datetime import datetime
-from pathlib import Path
 
 import websockets
 
-from utils import generate_params, parse_response
-
-MESSAGE_TYPES = {
-    11: "audio-only server response",
-    12: "frontend server response",
-    15: "error message from server"}
-MESSAGE_TYPE_SPECIFIC_FLAGS = {
-    0: "no sequence number",
-    1: "sequence number > 0",
-    2: "last message from server (seq < 0)",
-    3: "sequence number < 0"
-}
-MESSAGE_SERIALIZATION_METHODS = {
-    0: "no serialization",
-    1: "JSON",
-    15: "custom type"
-}
-MESSAGE_COMPRESSIONS = {
-    0: "no compression",
-    1: "gzip",
-    15: "custom compression method"
-}
+from tts_config import generate_params, print_text, generate_dir, parse_response
 
 
 class WebSocketTTSClient:
@@ -62,22 +36,21 @@ class WebSocketTTSClient:
         self.reconnect_attempts = 0
         self.websocket = None
 
-    def deep_update(self, default, override):
-        """
-        Recursively merge two dictionaries.
-        :param default: 原始默认值
-        :param override: 要覆盖的值
-        :return: merged dictionary
-        """
-        if isinstance(override, dict) and isinstance(default, dict):
-            for key, value in override.items():
-                if key in default:
-                    default.deep_update(default[key], value)
-                else:
-                    default[key] = value
-            return default
-        else:
-            return override
+    def generate_websocket_params(
+        self,
+        operation="submit",
+        text="",
+    ):
+        submit_request_json = generate_params(self, operation=operation, text=text)
+        payload_bytes = str.encode(json.dumps(submit_request_json))
+        payload_bytes = gzip.compress(payload_bytes)  # if no compression, comment this line
+        full_client_request = bytearray(self.default_header)
+        full_client_request.extend((len(payload_bytes)).to_bytes(4, 'big'))  # payload size(4 bytes)
+        full_client_request.extend(payload_bytes)  # payload
+        print("\n------------------------ test '{}' -------------------------".format(operation))
+        print_text("request json: ", submit_request_json)
+        print_text("request bytes: ", full_client_request)
+        return full_client_request
 
     async def connect(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -92,28 +65,25 @@ class WebSocketTTSClient:
                 ping_interval=None
             )
             self.reconnect_attempts = 0
-            print("连接成功")
+            print("连接成功...")
         except Exception as e:
             print(f"连接失败: {e}")
             await self.handle_reconnect()
 
     async def query(self, text, file_name, file_path):
-        full_client_request = generate_params(self, operation="submit", text=text)
+        full_client_request = self.generate_websocket_params(operation="submit", text=text)
         if not self.websocket:
             await self.connect()
         # 构建完整的文件路径，并解析为绝对路径
-        save_dir = Path(__file__).parent / file_path  # 获取目标目录
-        save_dir.mkdir(parents=True, exist_ok=True)  # 如果目录不存在，则递归创建
-        file_gen_path = (
-            Path(__file__).parent / file_path / (file_name + "." + self.encoding)).resolve()
-        print(file_gen_path)
+        file_gen_path = generate_dir(file_name, file_path, self.encoding)
+        print("Downloads: ", file_gen_path)
         with open(file_gen_path, "wb") as file_to_save:
             await self.websocket.send(full_client_request)
-            print("发送消息成功")
+            print("发送消息成功: ")
             while True:
                 try:
                     res = await asyncio.wait_for(self.websocket.recv(), timeout=10)
-                    condition = parse_response(self, res, file_to_save)
+                    condition = parse_response(res, file_to_save)
                     if condition:
                         file_to_save.flush()
                         os.fsync(file_to_save.fileno())
@@ -147,17 +117,17 @@ class WebSocketTTSClient:
 
 
 async def main():
+    # 仅为示例，非真实 token，请前往火山引擎官网申请
     client = WebSocketTTSClient(
-        appid="1323562191",
-        token="wp5PV123TlJFDAGRpbTwWS901rp8hbIj",
+        appid="1371415591",
+        token="wp5PV1P1TlIOIASPskTwSw901ux8hbIj",
         cluster="volcano_tts",
         voice_type="zh_female_meilinvyou_emo_v2_mars_bigtts",
         host="openspeech.bytedance.com",
         encoding="mp3"
     )
     await client.connect()
-    await client.query("你好，我是豆包", "test2", "./data")
-
+    await client.query("你好，我是豆包", "test_websocket", "./data")
     # 永久阻塞
     while True:
         await client.listen()
@@ -167,4 +137,4 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("客户端已手动终止")
+        print("客户端已手动终止...")
